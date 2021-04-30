@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import com.alibaba.csp.sentinel.dashboard.datasource.entity.rule.DegradeRuleEntity;
 
+import com.alibaba.csp.sentinel.dashboard.nacos.NacosUtil;
+import com.alibaba.csp.sentinel.dashboard.nacos.RuleTypeEnum;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -28,6 +31,11 @@ import org.springframework.stereotype.Component;
 public class InMemDegradeRuleStore extends InMemoryRuleRepositoryAdapter<DegradeRuleEntity> {
 
     private static AtomicLong ids = new AtomicLong(0);
+
+    @Autowired
+    public InMemDegradeRuleStore(NacosUtil nacosUtil) {
+        super(nacosUtil, RuleTypeEnum.DEGRADE);
+    }
 
     @Override
     protected long nextId() {

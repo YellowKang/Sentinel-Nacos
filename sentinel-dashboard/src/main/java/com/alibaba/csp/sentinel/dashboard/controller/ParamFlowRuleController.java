@@ -66,19 +66,6 @@ public class ParamFlowRuleController {
     @Autowired
     private RuleRepository<ParamFlowRuleEntity, Long> repository;
 
-    private boolean checkIfSupported(String app, String ip, int port) {
-        try {
-            return Optional.ofNullable(appManagement.getDetailApp(app))
-                .flatMap(e -> e.getMachine(ip, port))
-                .flatMap(m -> VersionUtils.parseVersion(m.getVersion())
-                    .map(v -> v.greaterOrEqual(version020)))
-                .orElse(true);
-            // If error occurred or cannot retrieve machine info, return true.
-        } catch (Exception ex) {
-            return true;
-        }
-    }
-
     @GetMapping("/rules")
     @AuthAction(PrivilegeType.READ_RULE)
     public Result<List<ParamFlowRuleEntity>> apiQueryAllRulesForMachine(@RequestParam String app,
@@ -87,21 +74,9 @@ public class ParamFlowRuleController {
         if (StringUtil.isEmpty(app)) {
             return Result.ofFail(-1, "app cannot be null or empty");
         }
-        if (StringUtil.isEmpty(ip)) {
-            return Result.ofFail(-1, "ip cannot be null or empty");
-        }
-        if (port == null || port <= 0) {
-            return Result.ofFail(-1, "Invalid parameter: port");
-        }
-        if (!checkIfSupported(app, ip, port)) {
-            return unsupportedVersion();
-        }
         try {
-            return sentinelApiClient.fetchParamFlowRulesOfMachine(app, ip, port)
-                .thenApply(repository::saveAll)
-                .thenApply(Result::ofSuccess)
-                .get();
-        } catch (ExecutionException ex) {
+            return Result.ofSuccess(repository.findAllByApp(app));
+        } catch (Exception ex) {
             logger.error("Error when querying parameter flow rules", ex.getCause());
             if (isNotSupported(ex.getCause())) {
                 return unsupportedVersion();
@@ -125,9 +100,6 @@ public class ParamFlowRuleController {
         if (checkResult != null) {
             return checkResult;
         }
-        if (!checkIfSupported(entity.getApp(), entity.getIp(), entity.getPort())) {
-            return unsupportedVersion();
-        }
         entity.setId(null);
         entity.getRule().setResource(entity.getResource().trim());
         Date date = new Date();
@@ -135,9 +107,8 @@ public class ParamFlowRuleController {
         entity.setGmtModified(date);
         try {
             entity = repository.save(entity);
-            publishRules(entity.getApp(), entity.getIp(), entity.getPort()).get();
             return Result.ofSuccess(entity);
-        } catch (ExecutionException ex) {
+        } catch (Exception ex) {
             logger.error("Error when adding new parameter flow rules", ex.getCause());
             if (isNotSupported(ex.getCause())) {
                 return unsupportedVersion();
@@ -203,18 +174,14 @@ public class ParamFlowRuleController {
         if (checkResult != null) {
             return checkResult;
         }
-        if (!checkIfSupported(entity.getApp(), entity.getIp(), entity.getPort())) {
-            return unsupportedVersion();
-        }
         entity.setId(id);
         Date date = new Date();
         entity.setGmtCreate(oldEntity.getGmtCreate());
         entity.setGmtModified(date);
         try {
             entity = repository.save(entity);
-            publishRules(entity.getApp(), entity.getIp(), entity.getPort()).get();
             return Result.ofSuccess(entity);
-        } catch (ExecutionException ex) {
+        } catch (Exception ex) {
             logger.error("Error when updating parameter flow rules, id=" + id, ex.getCause());
             if (isNotSupported(ex.getCause())) {
                 return unsupportedVersion();
@@ -240,9 +207,8 @@ public class ParamFlowRuleController {
 
         try {
             repository.delete(id);
-            publishRules(oldEntity.getApp(), oldEntity.getIp(), oldEntity.getPort()).get();
             return Result.ofSuccess(id);
-        } catch (ExecutionException ex) {
+        } catch (Exception ex) {
             logger.error("Error when deleting parameter flow rules", ex.getCause());
             if (isNotSupported(ex.getCause())) {
                 return unsupportedVersion();
